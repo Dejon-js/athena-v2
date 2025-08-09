@@ -28,7 +28,7 @@ async def ask_athena(
         if not query or len(query.strip()) < 3:
             raise HTTPException(status_code=400, detail="Query must be at least 3 characters long")
         
-        response = await _process_athena_query(query, context, db)
+        response = await _process_athena_query(query, context or {}, db)
         
         return {
             "status": "success",

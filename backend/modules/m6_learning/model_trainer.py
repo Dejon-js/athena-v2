@@ -130,7 +130,7 @@ class ModelTrainer:
             'model': model,
             'features': available_features,
             'metrics': {
-                'mae': round(mae, 2),
+                'mae': round(float(mae), 2),
                 'training_samples': len(X_train),
                 'test_samples': len(X_test)
             }
@@ -170,10 +170,10 @@ class ModelTrainer:
             'model': model,
             'features': available_features,
             'metrics': {
-                'mae': round(mae, 2),
+                'mae': round(float(mae), 2),
                 'training_samples': len(X_train),
                 'test_samples': len(X_test),
-                'meets_target': mae <= 3.0
+                'meets_target': float(mae) <= 3.0
             }
         }
     
