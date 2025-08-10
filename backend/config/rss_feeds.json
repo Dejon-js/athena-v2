@@ -1,0 +1,10 @@
+{
+  "rss_feeds": [
+    "https://www.espn.com/espn/rss/nfl/news",
+    "https://www.nfl.com/feeds/rss/news",
+    "https://profootballtalk.nbcsports.com/feed/",
+    "https://www.cbssports.com/rss/headlines/nfl/"
+  ],
+  "poll_interval_minutes": 5,
+  "max_articles_per_feed": 50
+}

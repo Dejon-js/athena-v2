@@ -2,8 +2,13 @@ import asyncio
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timezone
 import pandas as pd
+import hashlib
+import json
+import numpy as np
 from sqlalchemy.orm import Session
 import structlog
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 from ...shared.database import get_db, redis_client
 from ...shared.config import settings
@@ -385,3 +390,179 @@ class DataValidator:
         logger.warning("Sentiment conflict detected", conflict=conflict)
         cache_key = f"conflict:sentiment:{conflict['topic']}"
         redis_client.setex(cache_key, 86400, str(conflict))
+
+
+class DeduplicationService:
+    """
+    Two-layered deduplication system for news articles.
+    Layer 1: SHA-256 hash-based exact duplicate detection
+    Layer 2: Semantic similarity using sentence transformers
+    """
+    
+    def __init__(self):
+        self.similarity_threshold = 0.98
+        self.model = None
+        self._load_model()
+    
+    def _load_model(self):
+        """Load sentence transformer model for semantic similarity"""
+        try:
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+            logger.info("Sentence transformer model loaded successfully")
+        except Exception as e:
+            logger.error("Failed to load sentence transformer model", error=str(e))
+            self.model = None
+    
+    async def check_duplicate(self, article: Dict[str, Any]) -> bool:
+        """
+        Check if article is a duplicate using two-layer approach.
+        
+        Args:
+            article: Article data with title and content
+            
+        Returns:
+            True if duplicate found, False otherwise
+        """
+        try:
+            content_text = f"{article.get('title', '')} {article.get('content', '')}"
+            
+            if not content_text.strip():
+                return False
+            
+            is_exact_duplicate = await self._check_exact_duplicate(content_text)
+            if is_exact_duplicate:
+                logger.info("Exact duplicate found (Layer 1)", title=article.get('title', '')[:50])
+                return True
+            
+            is_semantic_duplicate = await self._check_semantic_duplicate(content_text, article)
+            if is_semantic_duplicate:
+                logger.info("Semantic duplicate found (Layer 2)", title=article.get('title', '')[:50])
+                return True
+            
+            await self._store_article_hash(content_text, article)
+            return False
+            
+        except Exception as e:
+            logger.error("Error checking duplicate", error=str(e))
+            return False
+    
+    async def _check_exact_duplicate(self, content: str) -> bool:
+        """Layer 1: Check exact duplicate using SHA-256 hash"""
+        try:
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            hash_key = f"article_hash:{content_hash}"
+            
+            exists = redis_client.exists(hash_key)
+            return bool(exists)
+            
+        except Exception as e:
+            logger.error("Error checking exact duplicate", error=str(e))
+            return False
+    
+    async def _check_semantic_duplicate(self, content: str, article: Dict[str, Any]) -> bool:
+        """Layer 2: Check semantic similarity using sentence transformers"""
+        try:
+            if not self.model:
+                logger.warning("Sentence transformer model not available, skipping semantic check")
+                return False
+            
+            content_embedding = self.model.encode([content])
+            
+            stored_embeddings_key = "article_embeddings"
+            stored_data = redis_client.get(stored_embeddings_key)
+            
+            if not stored_data:
+                return False
+            
+            stored_embeddings_list = json.loads(stored_data)
+            
+            for stored_item in stored_embeddings_list:
+                stored_embedding = np.array(stored_item['embedding']).reshape(1, -1)
+                
+                similarity = cosine_similarity(content_embedding, stored_embedding)[0][0]
+                
+                if similarity > self.similarity_threshold:
+                    logger.info("High semantic similarity found", 
+                              similarity=similarity,
+                              threshold=self.similarity_threshold,
+                              stored_title=stored_item.get('title', '')[:50])
+                    
+                    await self._update_canonical_record(stored_item['id'], article)
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error("Error checking semantic duplicate", error=str(e))
+            return False
+    
+    async def _store_article_hash(self, content: str, article: Dict[str, Any]):
+        """Store article hash and embedding for future duplicate detection"""
+        try:
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
+            hash_key = f"article_hash:{content_hash}"
+            
+            redis_client.setex(hash_key, 86400 * 7, json.dumps({
+                'title': article.get('title', ''),
+                'stored_at': datetime.now(timezone.utc).isoformat()
+            }))
+            
+            if self.model:
+                content_embedding = self.model.encode([content])[0].tolist()
+                
+                stored_embeddings_key = "article_embeddings"
+                stored_data = redis_client.get(stored_embeddings_key)
+                
+                if stored_data:
+                    stored_embeddings_list = json.loads(stored_data)
+                else:
+                    stored_embeddings_list = []
+                
+                embedding_data = {
+                    'id': content_hash,
+                    'title': article.get('title', ''),
+                    'embedding': content_embedding,
+                    'stored_at': datetime.now(timezone.utc).isoformat()
+                }
+                
+                stored_embeddings_list.append(embedding_data)
+                
+                if len(stored_embeddings_list) > 1000:
+                    stored_embeddings_list = stored_embeddings_list[-1000:]
+                
+                redis_client.setex(stored_embeddings_key, 86400 * 7, json.dumps(stored_embeddings_list))
+            
+        except Exception as e:
+            logger.error("Error storing article hash", error=str(e))
+    
+    async def _update_canonical_record(self, canonical_id: str, duplicate_article: Dict[str, Any]):
+        """Update canonical record to reinforce confidence score"""
+        try:
+            canonical_key = f"canonical_article:{canonical_id}"
+            canonical_data = redis_client.get(canonical_key)
+            
+            if canonical_data:
+                canonical_record = json.loads(canonical_data)
+                canonical_record['confidence_score'] = min(1.0, canonical_record.get('confidence_score', 0.5) + 0.1)
+                canonical_record['duplicate_count'] = canonical_record.get('duplicate_count', 0) + 1
+                canonical_record['last_duplicate_found'] = datetime.now(timezone.utc).isoformat()
+                
+                redis_client.setex(canonical_key, 86400 * 7, json.dumps(canonical_record))
+                
+                logger.info("Canonical record updated", 
+                          canonical_id=canonical_id,
+                          new_confidence=canonical_record['confidence_score'])
+            else:
+                canonical_record = {
+                    'id': canonical_id,
+                    'title': duplicate_article.get('title', ''),
+                    'confidence_score': 0.6,
+                    'duplicate_count': 1,
+                    'created_at': datetime.now(timezone.utc).isoformat(),
+                    'last_duplicate_found': datetime.now(timezone.utc).isoformat()
+                }
+                
+                redis_client.setex(canonical_key, 86400 * 7, json.dumps(canonical_record))
+            
+        except Exception as e:
+            logger.error("Error updating canonical record", error=str(e))

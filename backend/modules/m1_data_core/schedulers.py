@@ -125,6 +125,15 @@ class DataScheduler:
         )
         
         self.scheduler.add_job(
+            self._ingest_rss_feeds,
+            IntervalTrigger(minutes=5),
+            id='rss_feed_ingestion',
+            name='RSS Feed Data Ingestion',
+            max_instances=1,
+            coalesce=True
+        )
+        
+        self.scheduler.add_job(
             self._run_validation_cycle,
             IntervalTrigger(**self.schedule_config['validation_cycle']),
             id='validation_cycle',
@@ -212,6 +221,23 @@ class DataScheduler:
             async with self.data_engine:
                 result = await self.data_engine.ingest_dfs_data()
                 await self._log_job_result('dfs_data', result)
+                
+        except Exception as e:
+            logger.error("Error in scheduled DFS data ingestion", error=str(e))
+            await self._log_job_result('dfs_data', {'status': 'error', 'error': str(e)})
+    
+    async def _ingest_rss_feeds(self):
+        """Scheduled RSS feed ingestion"""
+        logger.info("Running scheduled RSS feed ingestion")
+        
+        try:
+            async with self.data_engine:
+                result = await self.data_engine.ingest_rss_feeds()
+                await self._log_job_result('rss_feeds', result)
+                
+        except Exception as e:
+            logger.error("Error in scheduled RSS feed ingestion", error=str(e))
+            await self._log_job_result('rss_feeds', {'status': 'error', 'error': str(e)})
                 
         except Exception as e:
             logger.error("Error in scheduled DFS data ingestion", error=str(e))
@@ -315,6 +341,8 @@ class DataScheduler:
                     result = await self.data_engine.ingest_news_sentiment()
                 elif data_type == 'dfs_data':
                     result = await self.data_engine.ingest_dfs_data()
+                elif data_type == 'rss_feeds':
+                    result = await self.data_engine.ingest_rss_feeds()
                 elif data_type == 'all':
                     result = await self.data_engine.ingest_all_data()
                 else:
