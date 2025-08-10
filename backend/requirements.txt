@@ -46,6 +46,8 @@ celery==5.3.4
 nltk==3.8.1
 textblob==0.17.1
 transformers==4.36.2
+feedparser==6.0.10
+sentence-transformers==2.2.2
 
 # WebSockets
 websockets==12.0

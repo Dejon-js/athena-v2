@@ -1,6 +1,9 @@
 import asyncio
 import aiohttp
 import requests
+import feedparser
+import json
+import hashlib
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 import pandas as pd
@@ -45,7 +48,8 @@ class DataIngestionEngine:
             self.ingest_vegas_odds(),
             self.ingest_advanced_metrics(),
             self.ingest_news_sentiment(),
-            self.ingest_dfs_data()
+            self.ingest_dfs_data(),
+            self.ingest_rss_feeds()
         ]
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -56,6 +60,7 @@ class DataIngestionEngine:
             'advanced_metrics': results[2],
             'news_sentiment': results[3],
             'dfs_data': results[4],
+            'rss_feeds': results[5],
             'timestamp': datetime.now(timezone.utc).isoformat()
         }
         
@@ -367,3 +372,111 @@ class DataIngestionEngine:
     async def _store_dfs_data(self, dfs_data: List[Dict]):
         """Store DFS data in PostgreSQL"""
         logger.info("Storing DFS data", count=len(dfs_data))
+    
+    async def ingest_rss_feeds(self) -> Dict[str, Any]:
+        """
+        Ingest RSS feeds for real-time news and injury updates.
+        
+        Returns:
+            Dict containing RSS ingestion results
+        """
+        logger.info("Starting RSS feed ingestion")
+        
+        try:
+            config_path = "/home/ubuntu/repos/athena-v2/backend/config/rss_feeds.json"
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+            
+            rss_feeds = config.get('rss_feeds', [])
+            max_articles = config.get('max_articles_per_feed', 50)
+            
+            all_articles = []
+            feed_results = {}
+            
+            for feed_url in rss_feeds:
+                try:
+                    logger.info("Processing RSS feed", url=feed_url)
+                    
+                    feed = feedparser.parse(feed_url)
+                    
+                    if feed.bozo:
+                        logger.warning("RSS feed parsing warning", url=feed_url, error=feed.bozo_exception)
+                    
+                    articles = []
+                    for entry in feed.entries[:max_articles]:
+                        article = {
+                            'title': entry.get('title', ''),
+                            'content': entry.get('summary', '') or entry.get('description', ''),
+                            'url': entry.get('link', ''),
+                            'published_date': entry.get('published', ''),
+                            'source': feed.feed.get('title', feed_url),
+                            'feed_url': feed_url,
+                            'ingested_at': datetime.now(timezone.utc).isoformat()
+                        }
+                        
+                        if article['title'] and article['content']:
+                            articles.append(article)
+                    
+                    all_articles.extend(articles)
+                    feed_results[feed_url] = {
+                        'status': 'success',
+                        'articles_found': len(articles),
+                        'feed_title': feed.feed.get('title', 'Unknown')
+                    }
+                    
+                    logger.info("RSS feed processed", url=feed_url, articles=len(articles))
+                    
+                except Exception as e:
+                    logger.error("Error processing RSS feed", url=feed_url, error=str(e))
+                    feed_results[feed_url] = {
+                        'status': 'error',
+                        'error': str(e)
+                    }
+            
+            if all_articles:
+                await self._store_rss_articles(all_articles)
+            
+            logger.info("RSS feed ingestion completed", 
+                       total_articles=len(all_articles),
+                       feeds_processed=len(feed_results))
+            
+            return {
+                'status': 'success',
+                'total_articles': len(all_articles),
+                'feeds_processed': len(feed_results),
+                'feed_results': feed_results,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+            
+        except Exception as e:
+            logger.error("Error during RSS feed ingestion", error=str(e))
+            return {
+                'status': 'error',
+                'error': str(e),
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+    
+    async def _store_rss_articles(self, articles: List[Dict[str, Any]]):
+        """Store RSS articles in database with deduplication"""
+        from .data_validation import DeduplicationService
+        
+        dedup_service = DeduplicationService()
+        
+        for article in articles:
+            try:
+                is_duplicate = await dedup_service.check_duplicate(article)
+                
+                if not is_duplicate:
+                    article_hash = hashlib.sha256(
+                        f"{article['title']}{article['content']}".encode()
+                    ).hexdigest()
+                    
+                    cache_key = f"rss_article:{article_hash}"
+                    redis_client.setex(cache_key, 86400 * 7, json.dumps(article))
+                    
+                    logger.info("RSS article stored", title=article['title'][:50])
+                else:
+                    logger.info("RSS article skipped (duplicate)", title=article['title'][:50])
+                    
+            except Exception as e:
+                logger.error("Error storing RSS article", error=str(e), title=article.get('title', 'Unknown'))
