@@ -4,8 +4,8 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone, timedelta
 import structlog
 
-from ...shared.database import get_db, redis_client
-from ...shared.config import settings
+from shared.database import get_db, redis_client
+from shared.config import settings
 
 logger = structlog.get_logger()
 

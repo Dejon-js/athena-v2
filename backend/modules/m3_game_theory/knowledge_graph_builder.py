@@ -5,8 +5,8 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 import structlog
 
-from ...shared.database import neo4j_conn
-from ...shared.config import settings
+from shared.database import neo4j_conn
+from shared.config import settings
 
 logger = structlog.get_logger()
 

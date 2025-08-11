@@ -6,10 +6,10 @@ from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 import structlog
 
-from .data_ingestion import DataIngestionEngine
-from .data_validation import DataValidator
-from ...shared.config import settings
-from ...shared.database import redis_client
+from modules.m1_data_core.data_ingestion import DataIngestionEngine
+from modules.m1_data_core.data_validation import DataValidator
+from shared.config import settings
+from shared.database import redis_client
 
 logger = structlog.get_logger()
 

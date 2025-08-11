@@ -11,9 +11,9 @@ from sqlalchemy.orm import Session
 from bs4 import BeautifulSoup
 import structlog
 
-from ...shared.database import get_db, redis_client
-from ...shared.config import settings
-from ...shared.utils import DataProcessor
+from shared.database import get_db, redis_client
+from shared.config import settings
+from shared.utils import DataProcessor
 
 logger = structlog.get_logger()
 
@@ -383,7 +383,7 @@ class DataIngestionEngine:
         logger.info("Starting RSS feed ingestion")
         
         try:
-            config_path = "/home/ubuntu/repos/athena-v2/backend/config/rss_feeds.json"
+            config_path = "config/rss_feeds.json"
             with open(config_path, 'r') as f:
                 config = json.load(f)
             

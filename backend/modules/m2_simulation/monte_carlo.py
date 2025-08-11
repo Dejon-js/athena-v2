@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timezone
 import structlog
 
-from ...shared.config import settings
+from shared.config import settings
 
 logger = structlog.get_logger()
 

@@ -10,9 +10,9 @@ import structlog
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-from ...shared.database import get_db, redis_client
-from ...shared.config import settings
-from ...shared.utils import DataProcessor
+from shared.database import get_db, redis_client
+from shared.config import settings
+from shared.utils import DataProcessor
 
 logger = structlog.get_logger()
 

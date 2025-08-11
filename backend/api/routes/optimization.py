@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional, List
 from sqlalchemy.orm import Session
 import structlog
 
-from ...shared.database import get_db
+from shared.database import get_db
 
 logger = structlog.get_logger()
 router = APIRouter()

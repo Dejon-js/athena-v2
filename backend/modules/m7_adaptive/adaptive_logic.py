@@ -3,8 +3,8 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 import structlog
 
-from ...shared.utils import get_current_nfl_week, is_low_data_mode
-from ...shared.database import get_db, redis_client
+from shared.utils import get_current_nfl_week, is_low_data_mode
+from shared.database import get_db, redis_client
 
 logger = structlog.get_logger()
 

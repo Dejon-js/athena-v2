@@ -4,10 +4,10 @@ from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import structlog
 
-from ..shared.config import settings
-from ..shared.database import init_database, close_connections
-from .routes import data, projections, optimization, status, chat
-from .websockets import websocket_manager
+from shared.config import settings
+from shared.database import init_database, close_connections
+from api.routes import data, projections, optimization, status, chat
+from api.websockets import websocket_manager
 
 logger = structlog.get_logger()
 

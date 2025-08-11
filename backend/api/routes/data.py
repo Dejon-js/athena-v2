@@ -3,8 +3,8 @@ from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
 import structlog
 
-from ...shared.database import get_db
-from ...modules.m1_data_core import DataIngestionEngine, DataValidator, DataScheduler
+from shared.database import get_db
+from modules.m1_data_core import DataIngestionEngine, DataValidator, DataScheduler
 
 logger = structlog.get_logger()
 router = APIRouter()

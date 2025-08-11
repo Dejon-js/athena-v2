@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from textblob import TextBlob
 import structlog
 
-from ...shared.database import get_db, redis_client
+from shared.database import get_db, redis_client
 
 logger = structlog.get_logger()
 

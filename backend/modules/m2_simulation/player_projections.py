@@ -8,9 +8,9 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 import structlog
 
-from ...shared.database import get_db, redis_client
-from ...shared.config import settings
-from ...shared.utils import get_current_nfl_week, is_low_data_mode
+from shared.database import get_db, redis_client
+from shared.config import settings
+from shared.utils import get_current_nfl_week, is_low_data_mode
 
 logger = structlog.get_logger()
 

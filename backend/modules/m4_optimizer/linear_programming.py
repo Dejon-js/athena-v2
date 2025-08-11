@@ -6,10 +6,10 @@ from datetime import datetime, timezone
 import pulp
 import structlog
 
-from .constraints import ConstraintManager
-from .objective_function import ObjectiveFunction
-from ...shared.config import settings
-from ...shared.database import redis_client
+from modules.m4_optimizer.constraints import ConstraintManager
+from modules.m4_optimizer.objective_function import ObjectiveFunction
+from shared.config import settings
+from shared.database import redis_client
 
 logger = structlog.get_logger()
 

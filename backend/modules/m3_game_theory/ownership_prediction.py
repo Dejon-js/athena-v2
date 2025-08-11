@@ -8,8 +8,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error
 import structlog
 
-from ...shared.database import get_db, redis_client
-from ...shared.config import settings
+from shared.database import get_db, redis_client
+from shared.config import settings
 
 logger = structlog.get_logger()
 

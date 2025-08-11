@@ -5,9 +5,9 @@ import structlog
 import aiohttp
 import json
 
-from ...shared.database import get_db, neo4j_conn
-from ...shared.config import settings
-from ...modules.m3_game_theory.knowledge_graph_builder import KnowledgeGraphBuilder
+from shared.database import get_db, neo4j_conn
+from shared.config import settings
+from modules.m3_game_theory.knowledge_graph_builder import KnowledgeGraphBuilder
 
 logger = structlog.get_logger()
 router = APIRouter()
