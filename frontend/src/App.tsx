@@ -61,7 +61,7 @@ function App() {
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center">
               <Brain className="h-8 w-8 text-blue-400 mr-3" />
-              <h1 className="text-2xl font-bold text-white">ATHENA v2.2</h1>
+              <h1 className="text-2xl font-bold text-white">ATHENA v2.4</h1>
               <span className="ml-3 px-2 py-1 text-xs bg-blue-600 rounded-full">
                 NFL DFS Optimizer
               </span>
@@ -114,8 +114,93 @@ function App() {
             {activeTab === 'chat' && <ChatInterface />}
             {activeTab === 'settings' && (
               <div className="bg-gray-800 rounded-lg p-6">
-                <h2 className="text-xl font-semibold mb-4">Settings</h2>
-                <p className="text-gray-400">Settings panel coming soon...</p>
+                <h2 className="text-xl font-semibold mb-6">Optimization Settings</h2>
+                
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Objective Function Weights</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Leveraged Ceiling Weight: <span className="text-blue-400">50%</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          defaultValue="50"
+                          className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Projected Points Weight: <span className="text-green-400">30%</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          defaultValue="30"
+                          className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Value Score Weight: <span className="text-yellow-400">20%</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          defaultValue="20"
+                          className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-lg font-medium mb-4">Portfolio Settings</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Target Lineups
+                        </label>
+                        <input
+                          type="number"
+                          defaultValue="150"
+                          min="1"
+                          max="500"
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Initial Pool Size
+                        </label>
+                        <input
+                          type="number"
+                          defaultValue="3000"
+                          min="150"
+                          max="10000"
+                          className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="pt-4 border-t border-gray-700">
+                    <button className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+                      Save Settings
+                    </button>
+                    <button className="ml-3 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+                      Reset to Defaults
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>

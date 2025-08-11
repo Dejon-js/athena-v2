@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Any, Optional, Tuple
 from scipy import stats
+from scipy.stats import nbinom
 import structlog
 
 logger = structlog.get_logger()
@@ -261,7 +262,13 @@ class DistributionModeler:
                 if dist_type == 'normal':
                     value = max(0, np.random.normal(params['mean'], params['std']))
                 elif dist_type == 'poisson':
-                    value = np.random.poisson(params['rate'])
+                    if 'td' in component.lower():
+                        rate = params['rate']
+                        r = max(1, rate * 0.5)
+                        p = r / (r + rate)
+                        value = np.random.negative_binomial(r, p)
+                    else:
+                        value = np.random.poisson(params['rate'])
                 elif dist_type == 'negative_binomial':
                     value = np.random.negative_binomial(params['n'], params['p'])
                 else:
