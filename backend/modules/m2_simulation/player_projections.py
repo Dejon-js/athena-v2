@@ -24,10 +24,10 @@ class PlayerProjectionEngine:
     def __init__(self):
         self.models = {}
         self.feature_columns = {
-            'QB': ['passing_yards_avg', 'passing_tds_avg', 'rushing_yards_avg', 'opponent_def_rank', 'vegas_total', 'weather_score'],
-            'RB': ['rushing_yards_avg', 'rushing_tds_avg', 'receiving_yards_avg', 'snap_percentage', 'opponent_def_rank', 'vegas_total'],
-            'WR': ['receiving_yards_avg', 'receiving_tds_avg', 'targets_avg', 'air_yards_share', 'opponent_def_rank', 'vegas_total'],
-            'TE': ['receiving_yards_avg', 'receiving_tds_avg', 'targets_avg', 'red_zone_targets', 'opponent_def_rank', 'vegas_total'],
+            'QB': ['passing_yards_avg', 'passing_tds_avg', 'rushing_yards_avg', 'total_air_yards', 'opponent_def_rank', 'vegas_total', 'weather_score'],
+            'RB': ['rushing_yards_avg', 'rushing_tds_avg', 'receiving_yards_avg', 'snap_percentage', 'red_zone_target_share', 'opponent_def_rank', 'vegas_total'],
+            'WR': ['receiving_yards_avg', 'receiving_tds_avg', 'targets_avg', 'total_air_yards', 'red_zone_target_share', 'wopr', 'adot', 'opponent_def_rank', 'vegas_total'],
+            'TE': ['receiving_yards_avg', 'receiving_tds_avg', 'targets_avg', 'total_air_yards', 'red_zone_target_share', 'wopr', 'adot', 'opponent_def_rank', 'vegas_total'],
             'DST': ['sacks_avg', 'interceptions_avg', 'fumbles_avg', 'points_allowed_avg', 'opponent_off_rank', 'vegas_total']
         }
         self.low_data_features = {

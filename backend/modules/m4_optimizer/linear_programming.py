@@ -4,6 +4,8 @@ import numpy as np
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timezone
 import pulp
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
 import structlog
 
 from modules.m4_optimizer.constraints import ConstraintManager
@@ -161,32 +163,46 @@ class LinearProgrammingOptimizer:
         player_data: pd.DataFrame, 
         constraints: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Generate portfolio of optimized lineups"""
+        """Generate portfolio of optimized lineups with K-Means clustering diversification"""
         
-        lineups = []
+        initial_pool_size = min(5000, self.lineup_count * 20)
+        logger.info("Generating initial lineup pool", pool_size=initial_pool_size, target=self.lineup_count)
+        
+        initial_lineups = []
         used_combinations = set()
         
-        for lineup_num in range(self.lineup_count):
+        for lineup_num in range(initial_pool_size):
             try:
                 lineup = await self._optimize_single_lineup(
-                    player_data, constraints, lineups, used_combinations
+                    player_data, constraints, initial_lineups, used_combinations
                 )
                 
                 if lineup:
-                    lineups.append(lineup)
+                    initial_lineups.append(lineup)
                     lineup_key = tuple(sorted([p['player_id'] for p in lineup['players']]))
                     used_combinations.add(lineup_key)
                 
-                if lineup_num % 10 == 0:
-                    logger.info("Optimization progress", 
+                if lineup_num % 100 == 0:
+                    logger.info("Initial pool generation progress", 
                                completed=lineup_num, 
-                               target=self.lineup_count)
+                               target=initial_pool_size)
                 
             except Exception as e:
                 logger.error("Error optimizing lineup", lineup_num=lineup_num, error=str(e))
                 continue
         
-        return lineups
+        if len(initial_lineups) <= self.lineup_count:
+            logger.warning("Initial pool smaller than target, returning all lineups", 
+                         pool_size=len(initial_lineups))
+            return initial_lineups
+        
+        diversified_lineups = await self._apply_kmeans_diversification(initial_lineups)
+        
+        logger.info("Portfolio diversification completed", 
+                   initial_pool=len(initial_lineups),
+                   final_count=len(diversified_lineups))
+        
+        return diversified_lineups
     
     async def _optimize_single_lineup(
         self, 
@@ -379,3 +395,88 @@ class LinearProgrammingOptimizer:
         redis_client.setex(cache_key, 3600, export_path)
         
         logger.info("Lineups exported", path=export_path, lineups=len(lineups))
+    
+    async def _apply_kmeans_diversification(self, lineups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Apply K-Means clustering to select diversified portfolio of 150 lineups"""
+        
+        logger.info("Applying K-Means clustering for portfolio diversification", 
+                   input_lineups=len(lineups), target_clusters=self.lineup_count)
+        
+        try:
+            feature_vectors = []
+            
+            for lineup in lineups:
+                features = [
+                    lineup['total_salary'],
+                    lineup['projected_points'],
+                    lineup['ceiling_points'],
+                    lineup['projected_ownership'],
+                    lineup['leverage_score']
+                ]
+                
+                position_counts = {'QB': 0, 'RB': 0, 'WR': 0, 'TE': 0, 'DST': 0}
+                team_exposure = {}
+                
+                for player in lineup['players']:
+                    pos = player['position']
+                    if pos in position_counts:
+                        position_counts[pos] += 1
+                    
+                    team = player.get('team', 'UNKNOWN')
+                    team_exposure[team] = team_exposure.get(team, 0) + 1
+                
+                features.extend([position_counts[pos] for pos in ['QB', 'RB', 'WR', 'TE', 'DST']])
+                
+                max_team_stack = max(team_exposure.values()) if team_exposure else 0
+                features.append(max_team_stack)
+                
+                salary_std = np.std([p['salary'] for p in lineup['players']])
+                features.append(salary_std)
+                
+                feature_vectors.append(features)
+            
+            scaler = StandardScaler()
+            feature_matrix = scaler.fit_transform(feature_vectors)
+            
+            kmeans = KMeans(
+                n_clusters=self.lineup_count,
+                random_state=42,
+                n_init=10,
+                max_iter=300
+            )
+            
+            cluster_labels = kmeans.fit_predict(feature_matrix)
+            
+            diversified_lineups = []
+            
+            for cluster_id in range(self.lineup_count):
+                cluster_indices = np.where(cluster_labels == cluster_id)[0]
+                
+                if len(cluster_indices) == 0:
+                    continue
+                
+                centroid = kmeans.cluster_centers_[cluster_id]
+                min_distance = float('inf')
+                best_lineup_idx = None
+                
+                for idx in cluster_indices:
+                    distance = np.linalg.norm(feature_matrix[idx] - centroid)
+                    if distance < min_distance:
+                        min_distance = distance
+                        best_lineup_idx = idx
+                
+                if best_lineup_idx is not None:
+                    selected_lineup = lineups[best_lineup_idx].copy()
+                    selected_lineup['cluster_id'] = int(cluster_id)
+                    selected_lineup['cluster_distance'] = float(min_distance)
+                    diversified_lineups.append(selected_lineup)
+            
+            logger.info("K-Means diversification completed", 
+                       clusters_created=len(diversified_lineups),
+                       target_clusters=self.lineup_count)
+            
+            return diversified_lineups
+            
+        except Exception as e:
+            logger.error("Error in K-Means diversification", error=str(e))
+            return lineups[:self.lineup_count]
