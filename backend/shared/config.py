@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     neo4j_password: str = Field(..., env="NEO4J_PASSWORD")
     
     sportradar_api_key: Optional[str] = Field(None, env="SPORTRADAR_API_KEY")
+    sportsdata_api_key: Optional[str] = Field(None, env="SPORTSDATA_API_KEY")
     draftkings_api_key: Optional[str] = Field(None, env="DRAFTKINGS_API_KEY")
     fanduel_api_key: Optional[str] = Field(None, env="FANDUEL_API_KEY")
     betmgm_api_key: Optional[str] = Field(None, env="BETMGM_API_KEY")
@@ -22,7 +23,13 @@ class Settings(BaseSettings):
     
     gemini_api_key: Optional[str] = Field(None, env="GEMINI_API_KEY")
     openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
-    
+
+    # Podcast & Vector Database
+    listen_notes_api_key: Optional[str] = Field(None, env="LISTEN_NOTES_API_KEY")
+    assemblyai_api_key: Optional[str] = Field(None, env="ASSEMBLYAI_API_KEY")
+    vector_db_path: str = Field("./chroma_db", env="VECTOR_DB_PATH")
+    podcast_batch_size: int = Field(5, env="PODCAST_BATCH_SIZE")
+
     environment: str = Field("development", env="ENVIRONMENT")
     debug: bool = Field(True, env="DEBUG")
     log_level: str = Field("INFO", env="LOG_LEVEL")

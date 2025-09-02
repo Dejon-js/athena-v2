@@ -26,16 +26,87 @@ class DataScheduler:
         self.data_validator = DataValidator()
         self.is_running = False
         
-        self.schedule_config = {
-            'vegas_odds': {'minutes': 30},  # Every 30 minutes
-            'injury_status': {'minutes': 5},  # Every 5 minutes
-            'player_stats': {'hours': 6},  # Every 6 hours
-            'news_sentiment': {'minutes': 15},  # Every 15 minutes
-            'dfs_data': {'hours': 2},  # Every 2 hours
-            'validation_cycle': {'hours': 1},  # Every hour
-            'full_ingestion': {'hours': 12}  # Every 12 hours
-        }
+        # NFL Season Scheduling Strategy - Optimized for real-time DFS
+        # Strategy adapts based on season phase and game schedule
+        self.schedule_config = self._get_season_optimized_schedule()
     
+    def _get_season_optimized_schedule(self) -> Dict[str, Dict[str, int]]:
+        """
+        Get season-optimized scheduling configuration based on NFL calendar.
+
+        Returns different frequencies based on:
+        - Pre-season (low frequency)
+        - Regular season (high frequency)
+        - Playoffs (very high frequency)
+        - Off-season (maintenance mode)
+        """
+        from datetime import datetime
+
+        current_date = datetime.now()
+        current_month = current_date.month
+        current_day = current_date.day
+
+        # NFL Season Phases
+        if current_month in [1, 2, 3, 4, 5, 6, 7]:  # Off-season
+            return self._get_off_season_schedule()
+        elif current_month == 8:  # Pre-season
+            return self._get_pre_season_schedule()
+        elif current_month in [9, 10, 11, 12]:  # Regular season
+            return self._get_regular_season_schedule()
+        else:  # Default to regular season
+            return self._get_regular_season_schedule()
+
+    def _get_regular_season_schedule(self) -> Dict[str, Dict[str, int]]:
+        """High-frequency schedule for regular season (Sept-Dec)"""
+        return {
+            # CRITICAL - Game day updates (every few minutes)
+            'injury_status': {'minutes': 3},   # Injuries change game outcomes
+            'vegas_odds': {'minutes': 10},     # Lines move rapidly during games
+
+            # HIGH FREQUENCY - Real-time DFS (15-30 min)
+            'news_sentiment': {'minutes': 15}, # Breaking news affects lineups
+            'rss_feeds': {'minutes': 20},      # NFL news and injury reports
+
+            # MEDIUM FREQUENCY - DFS data (1-3 hours)
+            'dfs_data': {'hours': 1},          # Slate updates and ownership
+            'player_stats': {'hours': 2},      # Game stats and projections
+
+            # MEDIUM FREQUENCY - Podcasts (4-6 hours)
+            'podcast_data': {'hours': 4},      # New episodes during season
+
+            # LOW FREQUENCY - Maintenance
+            'validation_cycle': {'hours': 1},  # Data quality checks
+            'full_ingestion': {'hours': 12}    # Complete system refresh
+        }
+
+    def _get_pre_season_schedule(self) -> Dict[str, Dict[str, int]]:
+        """Medium-frequency schedule for pre-season (Aug)"""
+        return {
+            'injury_status': {'minutes': 15},
+            'vegas_odds': {'minutes': 30},
+            'news_sentiment': {'minutes': 45},
+            'rss_feeds': {'minutes': 60},
+            'dfs_data': {'hours': 3},
+            'player_stats': {'hours': 6},
+            'podcast_data': {'hours': 8},
+            'validation_cycle': {'hours': 2},
+            'full_ingestion': {'hours': 24}
+        }
+
+    def _get_off_season_schedule(self) -> Dict[str, Dict[str, int]]:
+        """Low-frequency schedule for off-season (Jan-Jul)"""
+        return {
+            'injury_status': {'hours': 6},
+            'vegas_odds': {'hours': 12},
+            'news_sentiment': {'hours': 4},
+            'rss_feeds': {'hours': 6},
+            'dfs_data': {'hours': 24},         # No active DFS during off-season
+            'player_stats': {'hours': 24},
+            'podcast_data': {'hours': 12},
+            'validation_cycle': {'hours': 6},
+            'full_ingestion': {'hours': 48}    # Weekly refresh during off-season
+        }
+
     async def start_scheduler(self):
         """Start the data scheduling system"""
         logger.info("Starting data scheduler")
@@ -132,7 +203,16 @@ class DataScheduler:
             max_instances=1,
             coalesce=True
         )
-        
+
+        self.scheduler.add_job(
+            self._ingest_podcast_data,
+            IntervalTrigger(**self.schedule_config['podcast_data']),
+            id='podcast_data_ingestion',
+            name='Podcast Data Ingestion',
+            max_instances=1,
+            coalesce=True
+        )
+
         self.scheduler.add_job(
             self._run_validation_cycle,
             IntervalTrigger(**self.schedule_config['validation_cycle']),
@@ -229,20 +309,29 @@ class DataScheduler:
     async def _ingest_rss_feeds(self):
         """Scheduled RSS feed ingestion"""
         logger.info("Running scheduled RSS feed ingestion")
-        
+
         try:
             async with self.data_engine:
                 result = await self.data_engine.ingest_rss_feeds()
                 await self._log_job_result('rss_feeds', result)
-                
+
         except Exception as e:
             logger.error("Error in scheduled RSS feed ingestion", error=str(e))
             await self._log_job_result('rss_feeds', {'status': 'error', 'error': str(e)})
-                
+
+    async def _ingest_podcast_data(self):
+        """Scheduled podcast data ingestion"""
+        logger.info("Running scheduled podcast data ingestion")
+
+        try:
+            async with self.data_engine:
+                result = await self.data_engine.ingest_podcast_data()
+                await self._log_job_result('podcast_data', result)
+
         except Exception as e:
-            logger.error("Error in scheduled DFS data ingestion", error=str(e))
-            await self._log_job_result('dfs_data', {'status': 'error', 'error': str(e)})
-    
+            logger.error("Error in scheduled podcast data ingestion", error=str(e))
+            await self._log_job_result('podcast_data', {'status': 'error', 'error': str(e)})
+
     async def _run_validation_cycle(self):
         """Scheduled data validation cycle"""
         logger.info("Running scheduled data validation cycle")
@@ -343,6 +432,8 @@ class DataScheduler:
                     result = await self.data_engine.ingest_dfs_data()
                 elif data_type == 'rss_feeds':
                     result = await self.data_engine.ingest_rss_feeds()
+                elif data_type == 'podcast_data':
+                    result = await self.data_engine.ingest_podcast_data()
                 elif data_type == 'all':
                     result = await self.data_engine.ingest_all_data()
                 else:

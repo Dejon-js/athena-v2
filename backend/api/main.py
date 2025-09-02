@@ -6,7 +6,7 @@ import structlog
 
 from shared.config import settings
 from shared.database import init_database, close_connections
-from api.routes import data, projections, optimization, status, chat
+from api.routes import data, projections, optimization, status, chat, health
 from api.websockets import websocket_manager
 
 logger = structlog.get_logger()
@@ -45,6 +45,7 @@ app.include_router(projections.router, prefix="/api/v1/projections", tags=["proj
 app.include_router(optimization.router, prefix="/api/v1/optimize", tags=["optimization"])
 app.include_router(status.router, prefix="/api/v1/status", tags=["status"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["chat"])
+app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
 app.mount("/ws", websocket_manager.app)
 

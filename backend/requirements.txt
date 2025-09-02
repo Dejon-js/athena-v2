@@ -53,6 +53,18 @@ huggingface-hub==0.20.3
 # WebSockets
 websockets==12.0
 
+# Vector Database & AI
+chromadb==0.4.15
+sentence-transformers==2.2.2
+huggingface-hub==0.20.3
+
+# Podcast APIs
+listennotes
+assemblyai
+
+# System Monitoring
+# psutil==5.9.0  # Requires system dependencies, enable when needed
+
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1

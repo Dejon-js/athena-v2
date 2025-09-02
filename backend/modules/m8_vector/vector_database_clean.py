@@ -38,10 +38,7 @@ class VectorDatabaseManager:
 
     async def store_podcast_transcript(self, podcast_data: Dict[str, Any]) -> str:
         doc_id = str(uuid.uuid4())
-        team_name = podcast_data.get('team_name', '')
-        episode_title = podcast_data.get('episode_title', '')
-        transcript = podcast_data.get('transcript', '')
-        content = f'{team_name} {episode_title} {transcript}'
+        content = f'{podcast_data.get('team_name', '')} {podcast_data.get('episode_title', '')} {podcast_data.get('transcript', '')}'
         embedding = self.embedding_model.encode(content).tolist()
         
         metadata = {
@@ -80,11 +77,9 @@ class VectorDatabaseManager:
 
         formatted_results = []
         for i, doc_id in enumerate(results['ids'][0]):
-            content = results['documents'][0][i]
-            preview = content[:500] + '...' if len(content) > 500 else content
             formatted_results.append({
                 'doc_id': doc_id,
-                'content': preview,
+                'content': results['documents'][0][i][:500] + '...' if len(results['documents'][0][i]) > 500 else results['documents'][0][i],
                 'metadata': results['metadatas'][0][i],
                 'similarity_score': 1.0 - (results['distances'][0][i] if 'distances' in results else 0.0)
             })

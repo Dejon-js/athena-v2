@@ -22,7 +22,7 @@ async def trigger_data_ingestion(
     Trigger manual data ingestion for specified data type.
     
     Args:
-        data_type: Type of data to ingest ('all', 'vegas_odds', 'player_stats', 'news_sentiment', 'dfs_data')
+        data_type: Type of data to ingest ('all', 'vegas_odds', 'player_stats', 'news_sentiment', 'dfs_data', 'podcast_data')
     """
     logger.info("Manual data ingestion triggered", data_type=data_type)
     

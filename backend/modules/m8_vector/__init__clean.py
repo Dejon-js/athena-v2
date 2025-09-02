@@ -57,39 +57,18 @@ class VectorIntegrationService:
                 'freshness_distribution': {},
                 'search_timestamp': 0
             }
-
-        try:
-            # Search podcast transcripts for fantasy insights
-            podcast_results = await self.vector_db.search_podcasts(query, limit=limit//2)
-
-            # Format results to match expected structure
-            results = []
-            for result in podcast_results:
-                results.append({
-                    'content': result.get('content', ''),
-                    'source': 'podcast',
-                    'team': result.get('metadata', {}).get('team_name', ''),
-                    'relevance_score': result.get('similarity_score', 0),
-                    'age_days': 0,  # TODO: Calculate age from timestamp
-                    'sentiment': 'neutral'
-                })
-
-            return {
-                'query': query,
-                'total_results': len(results),
-                'results': results,
-                'freshness_distribution': {},
-                'search_timestamp': 0
-            }
-        except Exception as e:
-            print(f"Vector search error: {e}")
-            return {
-                'query': query,
-                'total_results': 0,
-                'results': [],
-                'freshness_distribution': {},
-                'search_timestamp': 0
-            }
+        
+        search_results = await self.vector_db.search_combined(query, limit)
+        temporal_results = await self.temporal_processor.apply_temporal_scoring(search_results)
+        filtered_results = await self.temporal_processor.filter_by_freshness(temporal_results)
+        
+        return {
+            'query': query,
+            'total_results': len(filtered_results),
+            'results': filtered_results,
+            'freshness_distribution': {},
+            'search_timestamp': 0
+        }
 
     async def get_collection_stats(self):
         if not VECTOR_DEPS_AVAILABLE:

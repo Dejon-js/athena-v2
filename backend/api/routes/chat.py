@@ -1,44 +1,63 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 import structlog
 import aiohttp
 import json
 
 from shared.database import get_db, neo4j_conn
 from shared.config import settings
+
+# Import vector components with error handling
+try:
+    from modules.m8_vector import VectorIntegrationService, VECTOR_DEPS_AVAILABLE
+    VECTOR_ENABLED = VECTOR_DEPS_AVAILABLE
+    if VECTOR_ENABLED:
+        print("✅ Vector search enabled - podcast intelligence active")
+    else:
+        print("⚠️ Vector dependencies not available - basic mode only")
+except ImportError as e:
+    print(f"⚠️ Vector module import failed: {e}")
+    VECTOR_ENABLED = False
+    VectorIntegrationService = None
+
 from modules.m3_game_theory.knowledge_graph_builder import KnowledgeGraphBuilder
 
 logger = structlog.get_logger()
 router = APIRouter()
 
 
+class AthenaQueryRequest(BaseModel):
+    """Request model for ATHENA queries."""
+    query: str
+    context: Optional[Dict[str, Any]] = None
+
+
 @router.post("/query")
 async def ask_athena(
-    query: str,
-    context: Optional[Dict[str, Any]] = None,
+    request: AthenaQueryRequest,
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
     Ask ATHENA a strategic question using RAG system.
-    
+
     Args:
-        query: Natural language question about strategy or lineups
-        context: Optional context (week, season, specific players)
+        request: AthenaQueryRequest containing query and optional context
     """
-    logger.info("ATHENA query received", query=query, context=context)
-    
+    logger.info("ATHENA query received", query=request.query, context=request.context)
+
     try:
-        if not query or len(query.strip()) < 3:
+        if not request.query or len(request.query.strip()) < 3:
             raise HTTPException(status_code=400, detail="Query must be at least 3 characters long")
-        
-        response = await _process_athena_query(query, context or {}, db)
+
+        response = await _process_athena_query(request.query, request.context or {}, db)
         
         return {
             "status": "success",
-            "query": query,
+            "query": request.query,
             "response": response,
-            "context": context,
+            "context": request.context,
             "response_time": "< 5 seconds"
         }
         
@@ -119,23 +138,100 @@ async def _process_athena_query(query: str, context: Dict[str, Any], db: Session
     
     try:
         kg_builder = KnowledgeGraphBuilder()
-        
+
         schema_index = await kg_builder.get_neo4j_schema_index()
-        
+
         cypher_query = await _generate_cypher_query(query, schema_index)
-        
+
         if cypher_query:
             graph_data = await _execute_cypher_query(cypher_query)
         else:
             graph_data = []
-        
-        final_response = await _synthesize_final_answer(query, graph_data, context)
-        
+
+        # Integrate vector search for podcast and news insights
+        if VECTOR_ENABLED:
+            vector_insights = await _get_vector_insights(query)
+        else:
+            vector_insights = None
+
+        final_response = await _synthesize_final_answer(query, graph_data, context, vector_insights)
+
         return final_response
         
     except Exception as e:
         logger.error("Error processing ATHENA query", error=str(e))
         return await _fallback_query_processing(query, context)
+
+
+# Temporarily disabled for testing
+# async def _get_vector_insights(query: str) -> Dict[str, Any]:
+#     """
+#     Get relevant insights from vector database (podcasts and news).
+#     """
+#     try:
+#         vector_service = VectorIntegrationService()
+
+#         # Search for fantasy-relevant insights
+#         search_results = await vector_service.search_fantasy_insights(query, limit=3)
+
+#         # Format insights for LLM context
+#         insights = []
+#         for result in search_results.get('results', []):
+#             insight = {
+#                 'content': result.get('content', ''),
+#                 'source': result.get('content_type', 'unknown'),
+#                 'team': result.get('team_name', ''),
+#                 'relevance_score': result.get('combined_score', 0),
+#                 'age_days': result.get('age_days', 0),
+#                 'sentiment': result.get('sentiment', 'neutral')
+#             }
+#             insights.append(insight)
+
+#         return {
+#             'insights': insights,
+#             'total_found': search_results.get('total_results', 0),
+#             'freshness_distribution': search_results.get('freshness_distribution', {})
+#         }
+
+#     except Exception as e:
+#         logger.error("Error getting vector insights", error=str(e))
+#         return {'insights': [], 'total_found': 0, 'freshness_distribution': {}}
+
+async def _get_vector_insights(query: str) -> Dict[str, Any]:
+    """
+    Get relevant insights from vector database (podcasts and news).
+    """
+    if not VECTOR_ENABLED:
+        return {'insights': [], 'total_found': 0, 'freshness_distribution': {}}
+
+    try:
+        vector_service = VectorIntegrationService()
+
+        # Search for fantasy-relevant insights
+        search_results = await vector_service.search_fantasy_insights(query, limit=3)
+
+        # Format insights for LLM context
+        insights = []
+        for result in search_results.get('results', []):
+            insight = {
+                'content': result.get('content', ''),
+                'source': result.get('content_type', 'unknown'),
+                'team': result.get('team_name', ''),
+                'relevance_score': result.get('combined_score', 0),
+                'age_days': result.get('age_days', 0),
+                'sentiment': result.get('sentiment', 'neutral')
+            }
+            insights.append(insight)
+
+        return {
+            'insights': insights,
+            'total_found': search_results.get('total_results', 0),
+            'freshness_distribution': search_results.get('freshness_distribution', {})
+        }
+
+    except Exception as e:
+        logger.error("Error getting vector insights", error=str(e))
+        return {'insights': [], 'total_found': 0, 'freshness_distribution': {}}
 
 
 async def _generate_cypher_query(query: str, schema_index: Dict[str, Any]) -> Optional[str]:
@@ -321,8 +417,8 @@ async def _execute_cypher_query(cypher_query: str) -> List[Dict[str, Any]]:
         return []
 
 
-async def _synthesize_final_answer(query: str, graph_data: List[Dict[str, Any]], context: Dict[str, Any]) -> Dict[str, Any]:
-    """Synthesize final answer using graph data and LLM"""
+async def _synthesize_final_answer(query: str, graph_data: List[Dict[str, Any]], context: Dict[str, Any], vector_insights: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Synthesize final answer using graph data, vector insights, and LLM"""
     try:
         llm_provider = _determine_llm_provider()
         
@@ -331,21 +427,37 @@ async def _synthesize_final_answer(query: str, graph_data: List[Dict[str, Any]],
         
         synthesis_prompt = _build_synthesis_prompt()
         graph_context = json.dumps(graph_data, indent=2)
-        
+
+        # Include vector insights if available
+        vector_context = ""
+        data_sources = ["neo4j_knowledge_graph", "graph_rag"]
+        vector_data_used = 0
+
+        if vector_insights and vector_insights.get('insights'):
+            vector_context = json.dumps(vector_insights['insights'], indent=2)
+            data_sources.extend(["podcast_transcripts", "news_articles", "vector_search"])
+            vector_data_used = len(vector_insights['insights'])
+
+        # Combine contexts
+        combined_context = f"Graph Data:\n{graph_context}"
+        if vector_context:
+            combined_context += f"\n\nVector Insights (Podcasts & News):\n{vector_context}"
+
         if llm_provider == "gemini":
-            answer = await _call_gemini_for_synthesis(query, graph_context, synthesis_prompt)
+            answer = await _call_gemini_for_synthesis(query, combined_context, synthesis_prompt)
         elif llm_provider == "openai":
-            answer = await _call_openai_for_synthesis(query, graph_context, synthesis_prompt)
+            answer = await _call_openai_for_synthesis(query, combined_context, synthesis_prompt)
         else:
             answer = None
-        
+
         if answer:
             return {
                 "answer": answer,
-                "confidence": 0.85,
-                "data_sources": ["neo4j_knowledge_graph", "graph_rag"],
+                "confidence": 0.90 if vector_insights else 0.85,  # Higher confidence with vector data
+                "data_sources": data_sources,
                 "graph_data_used": len(graph_data),
-                "query_method": "text_to_cypher"
+                "vector_data_used": vector_data_used,
+                "query_method": "text_to_cypher_with_vector_rag"
             }
         else:
             return await _fallback_query_processing(query, context)

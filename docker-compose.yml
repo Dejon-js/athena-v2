@@ -34,8 +34,6 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    env_file: 
-    - ./backend/.env  
     ports:
       - "8000:8000"
     environment:
@@ -44,6 +42,18 @@ services:
       - NEO4J_USER=neo4j
       - NEO4J_PASSWORD=athena_password
       - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your_secret_key_here_change_in_production
+      - JWT_SECRET=your_jwt_secret_here_change_in_production
+      - LISTEN_NOTES_API_KEY=9fffa86a38254ff990c33e7acdca2cd0
+      - ASSEMBLYAI_API_KEY=5a512fcff0e44dd5921da66e6a87b18e
+      - SPORTRADAR_API_KEY=1Wt5Yxf7uipDreLubMlALCewO3ayGNieCQB6F2La
+      - NEWS_API_KEY=4f603627-3930-4054-8cd1-7d9594445bd1
+      - SPORTSDATA_API_KEY=2389053b3a2f4f299eaa6de05a9a8eb9
+      - VECTOR_DB_PATH=./backend/chroma_db
+      - PODCAST_BATCH_SIZE=5
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - LOG_LEVEL=INFO
     depends_on:
       - postgres
       - neo4j
